@@ -232,7 +232,7 @@ Plot.prototype.axisEqual = function (bool) {
 	return this;
 };
 
-Plot.prototype.crosshairOn: function () {
+Plot.prototype.crosshairOn = function () {
 	this._crosshairOn = true;
 	this.render();
 	return this;
