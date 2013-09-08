@@ -163,6 +163,11 @@ Plot.prototype.options = function (options) {
 	return this;
 };
 
+Plot.prototype.size = function (width, height) {
+	this.options({width: width, height: height});
+	return this;
+};
+
 Plot.prototype.plot = function (x, y, options) {
 	var line = new Line(this, x, y, options);
 	// default line colors
