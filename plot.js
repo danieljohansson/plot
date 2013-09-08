@@ -1,29 +1,39 @@
+(function () {
 
-var Plot = function (x, y) {
-	this.width = 600;
-	this.height = 400;
-	this.markerSize = 5;
+// extend(target, source_1, ... , source_n);
+function extend(target) {
+	var sources = [].slice.call(arguments, 1);
+	sources.forEach(function (source) {
+		Object.getOwnPropertyNames(source).forEach(function (propName) {
+			Object.defineProperty(target, propName,
+				Object.getOwnPropertyDescriptor(source, propName));
+		});
+	});
+	return target;
+}
 
-	this._axisEqual = false;
-	this._axisScales = false;
-	this._crosshairOn = false;
-
-	this.canvas = document.createElement('canvas');
-	document.body.appendChild(this.canvas);
-	this.ctx = this.canvas.getContext('2d');
-
-	// store line data
-	this.lines = [];
-
-	this.setCtxTransform();
-
-	if (x !== undefined && y !== undefined) {
-		this.plot(x, y);
-	}
+//
+//  Line
+//
+var Line = function (plot, x, y, options) {
+	this.plot = plot;
+	this._options = options || {};
+	this._setData(x, y);
 };
 
+var onlyNumbers = function (x) {
+	var i, len = x.length;
+	for (i = 0; i < len; i++) {
+		// Set non numbers and NaN to null
+		if (typeof x[i] !== 'number' || x[i] !== x[i]) {
+			x[i] = null;
+			console.warn('Non numeric values in data set.');
+		}
+	}
+	return x;
+};
 
-Plot.prototype.plot = function (x, y, color, marker, noLine) {
+Line.prototype._setData = function (x, y) {
 	if (!Array.isArray(x) || !Array.isArray(y)) {
 		throw new TypeError('Parameters "x" and "y" must be arrays.');
 	}
@@ -36,35 +46,139 @@ Plot.prototype.plot = function (x, y, color, marker, noLine) {
 		console.warn('Too many data points. First 10000 plotted.');
 	}
 
-	var line = {
-		x: this.onlyNumbers(x),
-		y: this.onlyNumbers(y),
-		color: color,
-		marker: marker,
-		noLine: noLine
+	this.x = onlyNumbers(x);
+	this.y = onlyNumbers(y);
+};
+
+Line.prototype.setData = function (x, y) {
+	this._setData(x, y);
+	this.plot.render();
+};
+
+Line.prototype.options = function (options) {
+	extend(this._options, options);
+	this.plot.render();
+};
+
+Line.prototype.remove = function () {
+	this.dead = true;
+	this.plot.lineRemove();
+};
+
+
+//
+//  Plot
+//
+var colors = [
+	'royalblue',
+	'tomato',
+	'forestgreen',
+	'orange',
+	'darkmagenta',
+	'lightseagreen',
+	'chocolate',
+	'midnightblue',
+	'red',
+	'darkorchid'
+];
+
+var markerAt = {
+	'o': function (x, y, size) {
+		this.ctx.moveTo(x + size, y);
+		this.ctx.arc(x, y, size, 0, Math.PI*2, true);
+		this.ctx.moveTo(x, y);
+	},
+
+	'+': function (x, y, size) {
+		this.ctx.moveTo(Math.ceil(x) - size - 1, Math.ceil(y) + 0.5);
+		this.ctx.lineTo(Math.ceil(x) + size, Math.ceil(y) + 0.5);
+		this.ctx.moveTo(Math.ceil(x) - 0.5, Math.ceil(y) - size);
+		this.ctx.lineTo(Math.ceil(x) - 0.5, Math.ceil(y) + size + 1);
+		this.ctx.moveTo(x, y);
+	},
+
+	'x': function (x, y, size) {
+		this.ctx.moveTo(Math.round(x) - size + 1, Math.round(y) - size + 1);
+		this.ctx.lineTo(Math.round(x) + size - 1, Math.round(y) + size - 1);
+		this.ctx.moveTo(Math.round(x) - size + 1, Math.round(y) + size - 1);
+		this.ctx.lineTo(Math.round(x) + size - 1, Math.round(y) - size + 1);
+		this.ctx.moveTo(x, y);
+	},
+
+	'box': function (x, y, size) {
+		this.ctx.rect(Math.round(x) + 0.5 - size, Math.round(y) + 0.5 - size,
+			2*size - 1, 2*size - 1);
+		this.ctx.moveTo(x, y);
+	},
+
+	'.': function (x, y, size) {
+		size /=  2;
+		this.ctx.moveTo(x + size, y);
+		this.ctx.arc(x, y, size, 0, Math.PI*2, true);
+		this.ctx.moveTo(x, y);
+		this.ctx.fill();
+		this.ctx.moveTo(x, y);
+	}
+};
+
+var Plot = function (container, options) {
+	var defaults = {
+		width: 400,
+		height: 300,
+		marker: false,
+		markerSize: 5,
+		color: 'royalblue',
+		line: true,
+		axes: false,
+		axisEqual: false,
+		crosshair: false
 	};
-	this.lines.push(line);
+	this._options = extend({}, defaults, options || {});
+	this.width = this._options.width;
+	this.height = this._options.height;
 
+	this.canvas = document.createElement('canvas');
+	this.canvas.classList.add('plot-canvas');
+
+	if (!container) {
+		container = document.body;
+	}
+	else if (typeof container === 'string') {
+		container = document.querySelector(container);
+	}
+	container.appendChild(this.canvas);
+	this.ctx = this.canvas.getContext('2d');
+
+	this.lines = [];
+
+	this.resize();
+};
+
+Plot.prototype.options = function (options) {
+	extend(this._options, options);
+	this.width = this._options.width;
+	this.height = this._options.height;
+	this.resize();
 	this.render();
-
 	return this;
 };
 
-Plot.prototype.onlyNumbers = function (x) {
-	var i, len = x.length;
-	for (i = 0; i < len; i++) {
-		// Set non numbers and NaN to null
-		if (typeof x[i] !== 'number' || x[i] !== x[i]) {
-			x[i] = null;
-			console.warn('Non numeric values in data set.');
-		}
+Plot.prototype.plot = function (x, y, options) {
+	var line = new Line(this, x, y, options);
+	// default line colors
+	if (!line._options.color) {
+		extend(line._options, {
+			color: colors[this.lines.length % colors.length]
+		});
 	}
-	return x;
+	this.lines.push(line);
+	this.render();
+	return line;
 };
 
-Plot.prototype.setCtxTransform = function () {
+Plot.prototype.resize = function () {
 	var borderTop = 15, borderRight = 15, borderBottom = 15, borderLeft = 15;
-	if (this._axisOn) {
+	if (this._options.axes) {
 		borderBottom += 30;
 		borderLeft += 50;
 	}
@@ -77,19 +191,16 @@ Plot.prototype.setCtxTransform = function () {
 Plot.prototype.render = function () {
 	this.updateViewport();
 
-	// Paint white background
+	// clear canvas
 	this.ctx.save();
-	this.ctx.beginPath();
 	this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-	this.ctx.rect(0, 0, this.canvas.width, this.canvas.height);
-	this.ctx.fillStyle = 'white';
-	this.ctx.fill();
+	this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 	this.ctx.restore();
 
-	if (this._crosshairOn) {
+	if (this._options.crosshair) {
 		this.drawCrosshair();
 	}
-	if (this._axisOn) {
+	if (this._options.axes) {
 		this.ctx.font = '15px Calibri, sans-serif';
 		this.ctx.fillStyle = 'black';
 		this.drawXAxis();
@@ -107,7 +218,6 @@ Plot.prototype.updateViewport = function () {
 	var xMax, xMin, yMax, yMin;
 
 	for (j = 0; j < len; j++) {
-
 		xMax = Math.max.apply(this, this.lines[j].x);
 		xMin = Math.min.apply(this, this.lines[j].x);
 		yMax = Math.max.apply(this, this.lines[j].y);
@@ -119,7 +229,7 @@ Plot.prototype.updateViewport = function () {
 		if (j === 0 || yMin < this.yMin) { this.yMin = yMin; }
 	}
 
-	if (this._axisEqual) {
+	if (this._options.axisEqual) {
 		var xSpan = this.xMax - this.xMin;
 		var ySpan = this.yMax - this.yMin;
 		var xMid = this.xMin + xSpan / 2;
@@ -133,37 +243,6 @@ Plot.prototype.updateViewport = function () {
 		this.yMin = yMid - 0.5 * this.height / scale;
 		this.yMax = yMid + 0.5 * this.height / scale;
 	}
-};
-
-Plot.prototype.circleMarkerAt = function (x, y) {
-	var size = this.markerSize;
-	this.ctx.moveTo(x + size, y);
-	this.ctx.arc(x, y, size, 0, Math.PI*2, true);
-	this.ctx.moveTo(x, y);
-};
-
-Plot.prototype.plusMarkerAt = function (x, y) {
-	var size = this.markerSize;
-	this.ctx.moveTo(Math.ceil(x) - size - 1, Math.ceil(y) + 0.5);
-	this.ctx.lineTo(Math.ceil(x) + size, Math.ceil(y) + 0.5);
-	this.ctx.moveTo(Math.ceil(x) - 0.5, Math.ceil(y) - size);
-	this.ctx.lineTo(Math.ceil(x) - 0.5, Math.ceil(y) + size + 1);
-	this.ctx.moveTo(x, y);
-};
-
-Plot.prototype.xMarkerAt = function (x, y) {
-	var size = this.markerSize;
-	this.ctx.moveTo(Math.round(x) - size + 1, Math.round(y) - size + 1);
-	this.ctx.lineTo(Math.round(x) + size - 1, Math.round(y) + size - 1);
-	this.ctx.moveTo(Math.round(x) - size + 1, Math.round(y) + size - 1);
-	this.ctx.lineTo(Math.round(x) + size - 1, Math.round(y) - size + 1);
-	this.ctx.moveTo(x, y);
-};
-
-Plot.prototype.boxMarkerAt = function (x, y) {
-	var size = this.markerSize;
-	this.ctx.rect(Math.round(x) + 0.5 - size, Math.round(y) + 0.5 - size, 2*size - 1, 2*size - 1);
-	this.ctx.moveTo(x, y);
 };
 
 Plot.prototype.drawLine = function (line) {
@@ -184,58 +263,31 @@ Plot.prototype.drawLine = function (line) {
 		}
 	}
 
-	var markers = {
-		'o': 'circleMarkerAt',
-		'x': 'xMarkerAt',
-		'+': 'plusMarkerAt',
-		'box': 'boxMarkerAt'
-	};
+	var options = extend({}, this._options, line._options);
+	this.ctx.strokeStyle = this.ctx.fillStyle = options.color;
+
 	this.ctx.beginPath();
 	this.ctx.moveTo(x[0], y[0]);
 
 	for (i = 0; i < len; i++) {
 		if (x[i] === null || y[i] === null) {
 			lastWasNull = true;
+			continue;
 		}
-		else {
-			if (lastWasNull) {
-				this.ctx.moveTo(x[i], y[i]);
-			}
-			else if (!line.noLine) {
-				this.ctx.lineTo(x[i], y[i]);
-			}
-			if (markers.hasOwnProperty(line.marker)) {
-				this[markers[line.marker]](x[i], y[i]);
-			}
-			lastWasNull = false;
+
+		if (lastWasNull) {
+			this.ctx.moveTo(x[i], y[i]);
 		}
+		else if (options.line) {
+			this.ctx.lineTo(x[i], y[i]);
+		}
+		if (markerAt.hasOwnProperty(options.marker)) {
+			markerAt[options.marker].call(this, x[i], y[i], options.markerSize);
+		}
+		lastWasNull = false;
 	}
 
-	this.ctx.strokeStyle = line.color || 'black';
 	this.ctx.stroke();
-};
-
-Plot.prototype.setSize = function (width, height) {
-	// canvas width = width + borders width
-	if (width > 0 && height > 0) {
-		this.width = width;
-		this.height = height;
-		this.setCtxTransform();
-		this.render();
-	}
-	return this;
-};
-
-Plot.prototype.axisEqual = function (bool) {
-	this._axisEqual = (bool === undefined ? true : bool);
-	this.render();
-	return this;
-};
-
-Plot.prototype.crosshairOn = function () {
-	this._crosshairOn = true;
-	this.render();
-	return this;
 };
 
 Plot.prototype.drawCrosshair = function () {
@@ -243,26 +295,19 @@ Plot.prototype.drawCrosshair = function () {
 		this.drawLine({
 			x: [0, 0],
 			y: [this.yMin, this.yMax],
-			color: 'lightgray'
+			_options: {color: 'lightgray'}
 		});
 	}
 	if (this.yMin <= 0 && 0 <= this.yMax) {
 		this.drawLine({
 			x: [this.xMin, this.xMax],
 			y: [0, 0],
-			color: 'lightgray'
+			_options: {color: 'lightgray'}
 		});
 	}
 };
 
-Plot.prototype.axisOn = function () {
-		this._axisOn = true;
-		this.setCtxTransform();
-		this.render();
-		return this;
-	};
-
-Plot.prototype.getScales = function (min, max) {
+var getTicks = function (min, max) {
 	var log10 = function (x) { return Math.log(x)/Math.LN10; };
 	var keepEveryNth = function (arr, n) {
 		var keep = [];
@@ -275,7 +320,7 @@ Plot.prototype.getScales = function (min, max) {
 	var magn = Math.pow(10, Math.floor(log10(absMax)));
 	var a = Math.ceil(min / magn);
 	var b = Math.floor(max / magn);
-	var scales = [];
+	var ticks = [];
 
 	if (b - a < 5) {
 		magn = magn / 10;
@@ -285,20 +330,19 @@ Plot.prototype.getScales = function (min, max) {
 
 	for (var i = 0; i < b - a + 1; i++) {
 		// (1/magn) to avoid some trailing decimals
-		scales.push((a + i)/(1/magn));
+		ticks.push((a + i)/(1/magn));
 	}
 
 	if (b - a > 10) {
-		scales = keepEveryNth(scales, Math.ceil((b - a)/10));
+		ticks = keepEveryNth(ticks, Math.ceil((b - a)/10));
 	}
 
-	return scales;
+	return ticks;
 };
 
 Plot.prototype.drawXAxis = function () {
-	var scales = this.getScales(this.xMin, this.xMax);
+	var ticks = getTicks(this.xMin, this.xMax);
 	var x, y = -12.5;
-	var i, len = scales.length;
 	var size = 5;
 
 	this.ctx.beginPath();
@@ -306,16 +350,16 @@ Plot.prototype.drawXAxis = function () {
 	this.ctx.lineTo(this.width, y);
 	this.ctx.textAlign = 'center';
 
-	for (i = 0; i < len; i++) {
+	for (var i = 0, len = ticks.length; i < len; i++) {
 		// adjust to plot size
-		x = (scales[i] - this.xMin) / (this.xMax - this.xMin) * this.width;
+		x = (ticks[i] - this.xMin) / (this.xMax - this.xMin) * this.width;
 
 		this.ctx.moveTo(Math.ceil(x) - 0.5, Math.ceil(y) - size);
 		this.ctx.lineTo(Math.ceil(x) - 0.5, Math.ceil(y));
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
-		this.ctx.fillText(scales[i], x, -y + 20);
+		this.ctx.fillText(ticks[i], x, -y + 20);
 		this.ctx.restore();
 	}
 	this.ctx.strokeStyle = 'black';
@@ -323,9 +367,8 @@ Plot.prototype.drawXAxis = function () {
 };
 
 Plot.prototype.drawYAxis = function () {
-	var scales = this.getScales(this.yMin, this.yMax);
+	var ticks = getTicks(this.yMin, this.yMax);
 	var y, x = -12.5;
-	var i, len = scales.length;
 	var size = 5;
 
 	this.ctx.beginPath();
@@ -333,18 +376,31 @@ Plot.prototype.drawYAxis = function () {
 	this.ctx.lineTo(x, this.height);
 	this.ctx.textAlign = 'right';
 
-	for (i = 0; i < len; i++) {
+	for (var i = 0, len = ticks.length; i < len; i++) {
 		// adjust to plot size
-		y = (scales[i] - this.yMin) / (this.yMax - this.yMin) * this.height;
+		y = (ticks[i] - this.yMin) / (this.yMax - this.yMin) * this.height;
 
 		this.ctx.moveTo(Math.ceil(x) - size, Math.ceil(y) - 0.5);
 		this.ctx.lineTo(Math.ceil(x), Math.ceil(y) - 0.5);
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
-		this.ctx.fillText(scales[i], x - 12, -y + 4);
+		this.ctx.fillText(ticks[i], x - 12, -y + 4);
 		this.ctx.restore();
 	}
 	this.ctx.strokeStyle = 'black';
 	this.ctx.stroke();
 };
+
+Plot.prototype.lineRemove = function () {
+	for (var i = 0; i < this.lines.length; i++) {
+		if (this.lines[i].dead) {
+			this.lines.splice(i, 1);
+		}
+	}
+	this.render();
+};
+
+window.Plot = Plot;
+
+})();
