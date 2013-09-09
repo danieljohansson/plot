@@ -82,8 +82,8 @@ var colors = [
 	'darkorchid'
 ];
 
-var xAxisHeight = 40;
-var yAxisWidth = 60;
+var xAxisHeight = 35;
+var yAxisWidth = 50;
 
 var markerAt = {
 	'o': function (x, y, size) {
@@ -274,13 +274,13 @@ Plot.prototype.render = function () {
 	}
 
 	// axes
-	this.ctx.save();
-	this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-	this.ctx.clearRect(0, 0, yAxisWidth, this.canvas.height);
-	this.ctx.clearRect(0, this.canvas.height - xAxisHeight, this.canvas.width, xAxisHeight);
-	this.ctx.restore();
-
 	if (this._options.axes) {
+		this.ctx.save();
+		this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+		this.ctx.clearRect(0, 0, yAxisWidth, this.canvas.height);
+		this.ctx.clearRect(0, this.canvas.height - xAxisHeight, this.canvas.width, xAxisHeight);
+		this.ctx.restore();
+
 		this.ctx.font = '15px Calibri, sans-serif';
 		this.ctx.fillStyle = 'black';
 		this.drawXAxis();
