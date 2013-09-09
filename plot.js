@@ -82,6 +82,9 @@ var colors = [
 	'darkorchid'
 ];
 
+var xAxisHeight = 40;
+var yAxisWidth = 60;
+
 var markerAt = {
 	'o': function (x, y, size) {
 		this.ctx.moveTo(x + size, y);
@@ -131,14 +134,19 @@ var Plot = function (container, options) {
 		line: true,
 		axes: false,
 		axisEqual: false,
-		crosshair: false
+		crosshair: false,
+		xMin: undefined,
+		xMax: undefined,
+		yMin: undefined,
+		yMax: undefined
 	};
 	this._options = extend({}, defaults, options || {});
-	this.width = this._options.width;
-	this.height = this._options.height;
 
+	this.lines = [];
+
+	// DOM stuff
 	this.canvas = document.createElement('canvas');
-	this.canvas.classList.add('plot-canvas');
+	this.ctx = this.canvas.getContext('2d');
 
 	if (!container) {
 		container = document.body;
@@ -147,24 +155,33 @@ var Plot = function (container, options) {
 		container = document.querySelector(container);
 	}
 	container.appendChild(this.canvas);
-	this.ctx = this.canvas.getContext('2d');
 
-	this.lines = [];
-
-	this.resize();
+	this.canvas.width = this._options.width;
+	this.canvas.height = this._options.height;
+	this.setTransform();
 };
 
 Plot.prototype.options = function (options) {
 	extend(this._options, options);
-	this.width = this._options.width;
-	this.height = this._options.height;
-	this.resize();
+	this.canvas.width = this._options.width;
+	this.canvas.height = this._options.height;
+	this.setTransform();
 	this.render();
 	return this;
 };
 
 Plot.prototype.size = function (width, height) {
 	this.options({width: width, height: height});
+	return this;
+};
+
+Plot.prototype.limits = function (xMin, xMax, yMin, yMax) {
+	this.options({
+		xMin: xMin,
+		xMax: xMax,
+		yMin: yMin,
+		yMax: yMax
+	});
 	return this;
 };
 
@@ -181,48 +198,22 @@ Plot.prototype.plot = function (x, y, options) {
 	return line;
 };
 
-Plot.prototype.resize = function () {
-	var borderTop = 15, borderRight = 15, borderBottom = 15, borderLeft = 15;
+Plot.prototype.setTransform = function () {
+	var paddingTop = 15, paddingRight = 15, paddingBottom = 15, paddingLeft = 15;
 	if (this._options.axes) {
-		borderBottom += 30;
-		borderLeft += 50;
+		paddingBottom = xAxisHeight;
+		paddingLeft = yAxisWidth;
 	}
-	this.canvas.width = this.width + borderLeft + borderRight;
-	this.canvas.height = this.height + borderTop + borderBottom;
-	this.ctx.translate(borderLeft, this.height + borderTop);
+	this.width = this._options.width - paddingLeft - paddingRight;
+	this.height = this._options.height - paddingTop - paddingBottom;
+	this.ctx.translate(paddingLeft, this.height + paddingTop);
 	this.ctx.scale(1, -1);
 };
 
-Plot.prototype.render = function () {
-	this.updateViewport();
-
-	// clear canvas
-	this.ctx.save();
-	this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-	this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-	this.ctx.restore();
-
-	if (this._options.crosshair) {
-		this.drawCrosshair();
-	}
-	if (this._options.axes) {
-		this.ctx.font = '15px Calibri, sans-serif';
-		this.ctx.fillStyle = 'black';
-		this.drawXAxis();
-		this.drawYAxis();
-	}
-
-	// Draw lines
-	for (var j = 0; j < this.lines.length; j++) {
-		this.drawLine(this.lines[j]);
-	}
-};
-
 Plot.prototype.updateViewport = function () {
-	var j, len = this.lines.length;
 	var xMax, xMin, yMax, yMin;
 
-	for (j = 0; j < len; j++) {
+	for (var j = 0, len = this.lines.length; j < len; j++) {
 		xMax = Math.max.apply(this, this.lines[j].x);
 		xMin = Math.min.apply(this, this.lines[j].x);
 		yMax = Math.max.apply(this, this.lines[j].y);
@@ -234,19 +225,66 @@ Plot.prototype.updateViewport = function () {
 		if (j === 0 || yMin < this.yMin) { this.yMin = yMin; }
 	}
 
+	var xSpan = this.xMax - this.xMin;
+	var ySpan = this.yMax - this.yMin;
+
+	// ~15 px margin to axes
+	if (this._options.axes) {
+		this.xMin -= 15 * xSpan / this.width;
+		this.yMin -= 15 * ySpan / this.height;
+	}
+
 	if (this._options.axisEqual) {
-		var xSpan = this.xMax - this.xMin;
-		var ySpan = this.yMax - this.yMin;
 		var xMid = this.xMin + xSpan / 2;
 		var yMid = this.yMin + ySpan / 2;
 
-		// minimum pixels per length
+		// minimum pixels per length (x or y)
 		var scale = Math.min(this.width / xSpan, this.height / ySpan);
 
 		this.xMin = xMid - 0.5 * this.width / scale;
 		this.xMax = xMid + 0.5 * this.width / scale;
 		this.yMin = yMid - 0.5 * this.height / scale;
 		this.yMax = yMid + 0.5 * this.height / scale;
+	}
+
+	// override if there are user specified min/max values
+	if (this._options.xMin !== undefined) this.xMin = this._options.xMin;
+	if (this._options.xMax !== undefined) this.xMax = this._options.xMax;
+	if (this._options.yMin !== undefined) this.yMin = this._options.yMin;
+	if (this._options.yMax !== undefined) this.yMax = this._options.yMax;
+};
+
+Plot.prototype.render = function () {
+	this.updateViewport();
+
+	// clear canvas
+	this.ctx.save();
+	this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+	this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+	this.ctx.restore();
+
+	// crosshair
+	if (this._options.crosshair) {
+		this.drawCrosshair();
+	}
+
+	// lines
+	for (var j = 0; j < this.lines.length; j++) {
+		this.drawLine(this.lines[j]);
+	}
+
+	// axes
+	this.ctx.save();
+	this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+	this.ctx.clearRect(0, 0, yAxisWidth, this.canvas.height);
+	this.ctx.clearRect(0, this.canvas.height - xAxisHeight, this.canvas.width, xAxisHeight);
+	this.ctx.restore();
+
+	if (this._options.axes) {
+		this.ctx.font = '15px Calibri, sans-serif';
+		this.ctx.fillStyle = 'black';
+		this.drawXAxis();
+		this.drawYAxis();
 	}
 };
 
@@ -300,14 +338,14 @@ Plot.prototype.drawCrosshair = function () {
 		this.drawLine({
 			x: [0, 0],
 			y: [this.yMin, this.yMax],
-			_options: {color: 'lightgray'}
+			_options: {color: 'lightgray', markerSize: 0}
 		});
 	}
 	if (this.yMin <= 0 && 0 <= this.yMax) {
 		this.drawLine({
 			x: [this.xMin, this.xMax],
 			y: [0, 0],
-			_options: {color: 'lightgray'}
+			_options: {color: 'lightgray', markerSize: 0}
 		});
 	}
 };
@@ -347,20 +385,20 @@ var getTicks = function (min, max) {
 
 Plot.prototype.drawXAxis = function () {
 	var ticks = getTicks(this.xMin, this.xMax);
-	var x, y = -12.5;
+	var x, y = 0;
 	var size = 5;
 
 	this.ctx.beginPath();
-	this.ctx.moveTo(-13, y);
-	this.ctx.lineTo(this.width, y);
+	this.ctx.moveTo(0, y + 0.5);
+	this.ctx.lineTo(this.width, y + 0.5);
 	this.ctx.textAlign = 'center';
 
 	for (var i = 0, len = ticks.length; i < len; i++) {
 		// adjust to plot size
 		x = (ticks[i] - this.xMin) / (this.xMax - this.xMin) * this.width;
 
-		this.ctx.moveTo(Math.ceil(x) - 0.5, Math.ceil(y) - size);
-		this.ctx.lineTo(Math.ceil(x) - 0.5, Math.ceil(y));
+		this.ctx.moveTo(Math.floor(x) + 0.5, y - size);
+		this.ctx.lineTo(Math.floor(x) + 0.5, y);
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
@@ -373,20 +411,20 @@ Plot.prototype.drawXAxis = function () {
 
 Plot.prototype.drawYAxis = function () {
 	var ticks = getTicks(this.yMin, this.yMax);
-	var y, x = -12.5;
+	var x = 0, y;
 	var size = 5;
 
 	this.ctx.beginPath();
-	this.ctx.moveTo(x, -13);
-	this.ctx.lineTo(x, this.height);
+	this.ctx.moveTo(x + 0.5, 0);
+	this.ctx.lineTo(x + 0.5, this.height);
 	this.ctx.textAlign = 'right';
 
 	for (var i = 0, len = ticks.length; i < len; i++) {
 		// adjust to plot size
 		y = (ticks[i] - this.yMin) / (this.yMax - this.yMin) * this.height;
 
-		this.ctx.moveTo(Math.ceil(x) - size, Math.ceil(y) - 0.5);
-		this.ctx.lineTo(Math.ceil(x), Math.ceil(y) - 0.5);
+		this.ctx.moveTo(x - size, Math.floor(y) + 0.5);
+		this.ctx.lineTo(x, Math.floor(y) + 0.5);
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
