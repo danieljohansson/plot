@@ -232,6 +232,8 @@ Plot.prototype.updateViewport = function () {
 	if (this._options.axes) {
 		this.xMin -= 15 * xSpan / this.width;
 		this.yMin -= 15 * ySpan / this.height;
+		xSpan = this.xMax - this.xMin;
+		ySpan = this.yMax - this.yMin;
 	}
 
 	if (this._options.axisEqual) {
