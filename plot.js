@@ -138,7 +138,9 @@ var Plot = function (container, options) {
 		xMin: undefined,
 		xMax: undefined,
 		yMin: undefined,
-		yMax: undefined
+		yMax: undefined,
+		xTicks: 6, // approximate
+		yTicks: 6 // approximate
 	};
 	this._options = extend({}, defaults, options || {});
 
@@ -342,14 +344,14 @@ Plot.prototype.drawCrosshair = function () {
 		this.drawLine({
 			x: [0, 0],
 			y: [this.yMin, this.yMax],
-			_options: {color: 'lightgray', markerSize: 0}
+			_options: {color: 'lightgray', marker: false}
 		});
 	}
 	if (this.yMin <= 0 && 0 <= this.yMax) {
 		this.drawLine({
 			x: [this.xMin, this.xMax],
 			y: [0, 0],
-			_options: {color: 'lightgray', markerSize: 0}
+			_options: {color: 'lightgray', marker: false}
 		});
 	}
 };
@@ -388,12 +390,17 @@ var getTicksLegacy = function (min, max) {
 	return ticks;
 };
 
-var getTicks = function (min, max, minFixed, maxFixed) {
+Plot.prototype.getTicks = function (axis) {
+	var min = this[axis + 'Min'];
+	var max = this[axis + 'Max'];
+	var minFixed = this._options[axis + 'Min'] !== undefined;
+	var maxFixed = this._options[axis + 'Max'] !== undefined;
+	var numOfTicks = this._options[axis + 'Ticks'];
+	
 	var log10 = function (x) {
 		return Math.log(x) / Math.LN10;
 	};
 
-	var numOfTicks = 6; // approximate
 	var step = (max - min) / numOfTicks;
 	// magnitude of step size
 	var stepMagn = Math.pow(10, Math.floor(log10(step)));
@@ -437,26 +444,26 @@ var prettyNum = function (x) {
 		return str
 	}
 	// make some different small perturbations and check if the string got shorter
-	var factors = [1, -1, 2, -2, 3, -3, 4, -4];
-	for (var i = 0; i < factors.length; i++) {
+	for (var factor = 0; factor < 20; factor++) {
 		// require improvement by 2 decimals
-		if ((x + factors[i]*x*eps).toString().length <= str.length - 2) {
-			return (x + factors[i]*x*eps).toString();
+		if ((x + factor*x*eps).toString().length <= str.length - 2) {
+			return (x + factor*x*eps).toString();
+		}
+		if ((x - factor*x*eps).toString().length <= str.length - 2) {
+			return (x - factor*x*eps).toString();
 		}
 	}
 	return str;
 };
 
 Plot.prototype.drawXAxis = function () {
-	var minFixed = this._options.xMin !== undefined;
-	var maxFixed = this._options.xMax !== undefined;
-	var ticks = getTicks(this.xMin, this.xMax, minFixed, maxFixed); 
+	var ticks = this.getTicks('x'); 
 	var x, y = 0;
 	var size = 5;
 
 	this.ctx.beginPath();
 	this.ctx.moveTo(0, y + 0.5);
-	this.ctx.lineTo(this.width, y + 0.5);
+	this.ctx.lineTo(this.width + 1, y + 0.5);
 	this.ctx.textAlign = 'center';
 
 	for (var i = 0, len = ticks.length; i < len; i++) {
@@ -476,15 +483,13 @@ Plot.prototype.drawXAxis = function () {
 };
 
 Plot.prototype.drawYAxis = function () {
-	var minFixed = this._options.yMin !== undefined;
-	var maxFixed = this._options.yMax !== undefined;
-	var ticks = getTicks(this.yMin, this.yMax, minFixed, maxFixed); 
+	var ticks = this.getTicks('y'); 
 	var x = 0, y;
 	var size = 5;
 
 	this.ctx.beginPath();
 	this.ctx.moveTo(x + 0.5, 0);
-	this.ctx.lineTo(x + 0.5, this.height);
+	this.ctx.lineTo(x + 0.5, this.height + 1);
 	this.ctx.textAlign = 'right';
 
 	for (var i = 0, len = ticks.length; i < len; i++) {
