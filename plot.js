@@ -1,7 +1,7 @@
 (function () {
 
 // extend(target, source_1, ... , source_n);
-function extend(target) {
+var extend = function (target) {
 	var sources = [].slice.call(arguments, 1);
 	sources.forEach(function (source) {
 		Object.getOwnPropertyNames(source).forEach(function (propName) {
@@ -166,7 +166,9 @@ Plot.prototype.options = function (options) {
 	this.canvas.width = this._options.width;
 	this.canvas.height = this._options.height;
 	this.setTransform();
-	this.render();
+	if (this.lines.length) {
+		this.render();
+	}
 	return this;
 };
 
@@ -352,7 +354,7 @@ Plot.prototype.drawCrosshair = function () {
 	}
 };
 
-var getTicks = function (min, max) {
+var getTicksLegacy = function (min, max) {
 	var log10 = function (x) { return Math.log(x)/Math.LN10; };
 	var keepEveryNth = function (arr, n) {
 		var keep = [];
@@ -361,19 +363,20 @@ var getTicks = function (min, max) {
 		}
 		return keep;
 	};
-	var absMax = Math.max(Math.abs(min), Math.abs(max));
-	var magn = Math.pow(10, Math.floor(log10(absMax)));
+
+	var ticks = [];
+	var maxAbs = Math.max(Math.abs(min), Math.abs(max));
+	var magn = Math.pow(10, Math.floor(log10(maxAbs)));
 	var a = Math.ceil(min / magn);
 	var b = Math.floor(max / magn);
-	var ticks = [];
 
 	if (b - a < 5) {
-		magn = magn / 10;
+		magn /= 10;
 		a = Math.ceil(min / magn);
 		b = Math.floor(max / magn);
 	}
 
-	for (var i = 0; i < b - a + 1; i++) {
+	for (var i = 0; i <= b - a; i++) {
 		// (1/magn) to avoid some trailing decimals
 		ticks.push((a + i)/(1/magn));
 	}
@@ -385,8 +388,69 @@ var getTicks = function (min, max) {
 	return ticks;
 };
 
+var getTicks = function (min, max, minFixed, maxFixed) {
+	var log10 = function (x) {
+		return Math.log(x) / Math.LN10;
+	};
+
+	var numOfTicks = 6; // approximate
+	var step = (max - min) / numOfTicks;
+	// magnitude of step size
+	var stepMagn = Math.pow(10, Math.floor(log10(step)));
+	var stepRound = stepMagn * Math.round(step / stepMagn);
+	
+	// Set starting point to closest round number larger than min
+	var start = stepMagn * Math.ceil(min / stepMagn);
+
+	if (minFixed) {
+		start = min;
+	}
+	else if (min <= 0 && max >= 0) {
+		start = 0;
+	}
+	
+	var ticks = [start];
+	// fill left from starting point
+	while (ticks[0] - stepRound >= min) {
+		ticks.unshift(ticks[0] - stepRound);
+	}
+	// fill right from starting point
+	while (ticks[ticks.length - 1] + stepRound <= max) {
+		ticks.push(ticks[ticks.length - 1] + stepRound);
+	}
+	
+	if (maxFixed) {
+		if (max - ticks[ticks.length - 1] < stepRound / 2) {
+			ticks.pop();
+		}
+		ticks.push(max);
+	}
+	
+	return ticks;
+};
+
+var prettyNum = function (x) {
+	var str = x.toString();
+	var eps = 1e-16;
+	// no 1.00000000000001 or 0.999999999999999
+	if (str.length < 17) {
+		return str
+	}
+	// make some different small perturbations and check if the string got shorter
+	var factors = [1, -1, 2, -2, 3, -3, 4, -4];
+	for (var i = 0; i < factors.length; i++) {
+		// require improvement by 2 decimals
+		if ((x + factors[i]*x*eps).toString().length <= str.length - 2) {
+			return (x + factors[i]*x*eps).toString();
+		}
+	}
+	return str;
+};
+
 Plot.prototype.drawXAxis = function () {
-	var ticks = getTicks(this.xMin, this.xMax);
+	var minFixed = this._options.xMin !== undefined;
+	var maxFixed = this._options.xMax !== undefined;
+	var ticks = getTicks(this.xMin, this.xMax, minFixed, maxFixed); 
 	var x, y = 0;
 	var size = 5;
 
@@ -404,7 +468,7 @@ Plot.prototype.drawXAxis = function () {
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
-		this.ctx.fillText(ticks[i], x, -y + 20);
+		this.ctx.fillText(prettyNum(ticks[i]), x, -y + 20);
 		this.ctx.restore();
 	}
 	this.ctx.strokeStyle = 'black';
@@ -412,7 +476,9 @@ Plot.prototype.drawXAxis = function () {
 };
 
 Plot.prototype.drawYAxis = function () {
-	var ticks = getTicks(this.yMin, this.yMax);
+	var minFixed = this._options.yMin !== undefined;
+	var maxFixed = this._options.yMax !== undefined;
+	var ticks = getTicks(this.yMin, this.yMax, minFixed, maxFixed); 
 	var x = 0, y;
 	var size = 5;
 
@@ -430,7 +496,7 @@ Plot.prototype.drawYAxis = function () {
 
 		this.ctx.save();
 		this.ctx.scale(1, -1);
-		this.ctx.fillText(ticks[i], x - 12, -y + 4);
+		this.ctx.fillText(prettyNum(ticks[i]), x - 12, -y + 4);
 		this.ctx.restore();
 	}
 	this.ctx.strokeStyle = 'black';
