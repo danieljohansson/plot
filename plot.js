@@ -401,10 +401,15 @@ Plot.prototype.getTicks = function (axis) {
 		return Math.log(x) / Math.LN10;
 	};
 
-	var step = (max - min) / numOfTicks;
+	var step = (max - min) / (numOfTicks - 1);
 	// magnitude of step size
 	var stepMagn = Math.pow(10, Math.floor(log10(step)));
 	var stepRound = stepMagn * Math.round(step / stepMagn);
+	
+	// explicitly allow 0.25 and 0.75
+	if (Math.abs(stepMagn * 2.5 - step) < Math.abs(stepRound - step)) {
+		stepRound = stepMagn * 2.5;
+	}
 	
 	// Set starting point to closest round number larger than min
 	var start = stepMagn * Math.ceil(min / stepMagn);
