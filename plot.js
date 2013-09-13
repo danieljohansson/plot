@@ -443,6 +443,10 @@ var prettyNum = function (x) {
 	if (str.length < 17) {
 		return str
 	}
+	// special case zero
+	if (x > -eps && x < eps) {
+		return '0';
+	}
 	// make some different small perturbations and check if the string got shorter
 	for (var factor = 0; factor < 20; factor++) {
 		// require improvement by 2 decimals
