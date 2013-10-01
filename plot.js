@@ -10,7 +10,7 @@ var extend = function (target) {
 		});
 	});
 	return target;
-}
+};
 
 //
 //  Line
@@ -356,40 +356,6 @@ Plot.prototype.drawCrosshair = function () {
 	}
 };
 
-var getTicksLegacy = function (min, max) {
-	var log10 = function (x) { return Math.log(x)/Math.LN10; };
-	var keepEveryNth = function (arr, n) {
-		var keep = [];
-		for (var i = 0; i < arr.length; i += n) {
-			keep.push(arr[i]);
-		}
-		return keep;
-	};
-
-	var ticks = [];
-	var maxAbs = Math.max(Math.abs(min), Math.abs(max));
-	var magn = Math.pow(10, Math.floor(log10(maxAbs)));
-	var a = Math.ceil(min / magn);
-	var b = Math.floor(max / magn);
-
-	if (b - a < 5) {
-		magn /= 10;
-		a = Math.ceil(min / magn);
-		b = Math.floor(max / magn);
-	}
-
-	for (var i = 0; i <= b - a; i++) {
-		// (1/magn) to avoid some trailing decimals
-		ticks.push((a + i)/(1/magn));
-	}
-
-	if (b - a > 10) {
-		ticks = keepEveryNth(ticks, Math.ceil((b - a)/10));
-	}
-
-	return ticks;
-};
-
 Plot.prototype.getTicks = function (axis) {
 	var min = this[axis + 'Min'];
 	var max = this[axis + 'Max'];
@@ -446,7 +412,7 @@ var prettyNum = function (x) {
 	var eps = 1e-16;
 	// no 1.00000000000001 or 0.999999999999999
 	if (str.length < 17) {
-		return str
+		return str;
 	}
 	// special case zero
 	if (x > -eps && x < eps) {
